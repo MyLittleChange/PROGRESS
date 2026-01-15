@@ -94,6 +94,12 @@ PROGRESS/
     └── ...
 ```
 
+## Dataset
+
+### LLaVA-1.5
+
+Follow the visual instruction tuning dataset download guides in the [official LLaVA GitHub page](https://github.com/haotian-liu/LLaVA). Place the downloaded files in `PROGRESS/2_PROGRESS_Training/playground/data`. Also, prepare for the evaluation benchmark datasets by following the instructions on the page.
+
 ## Quick Start
 
 ### Prerequisites
