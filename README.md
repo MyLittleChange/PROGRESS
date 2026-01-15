@@ -8,11 +8,11 @@
 
 <div style="font-family: charter; text-align: center; margin-top: 2rem;">
     <a href="https://mylittlechange.github.io/" target="_blank" style="color: #333; font-size: 1.4rem; font-weight: bold; text-decoration: none; transition: color 0.3s; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">
-        Qian Yang
+        Qian Yang*
     </a>
     <span style="margin: 0 0.5rem; color: #666;">•</span>
     <a href="https://scholar.google.com/citations?hl=en&user=ZER2BeIAAAAJ&view_op=list_works&sortby=pubdate" target="_blank" style="color: #333; font-size: 1.4rem; font-weight: bold; text-decoration: none; transition: color 0.3s; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">
-        Shivam Chandhok
+        Shivam Chandhok*
     </a>
     <span style="margin: 0 0.5rem; color: #666;">•</span>
     <a href="https://oscmansan.github.io/" target="_blank" style="color: #333; font-size: 1.4rem; font-weight: bold; text-decoration: none; transition: color 0.3s; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">
