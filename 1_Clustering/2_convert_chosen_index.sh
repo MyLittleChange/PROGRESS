@@ -82,7 +82,7 @@ python ${UTILS_DIR}/COINCIDE_Indices_to_Accuracy.py \
 echo ""
 echo "Step 1: Converting Top 50K indices (selection from ${NCENTROIDS_SELECTION} centers, annotation from ${NCENTROIDS_ANNOTATION} centers)..."
 python ${UTILS_DIR}/COINCIDE_Indices_to_Accuracy.py \
-    --llava_data_path ${LLAVA_DATA_PATH} \
+    --llava_data_path ${OUTPUT_WITH_CLUSTER_ID} \
     --chosen_indices_path ${INDICES_50K} \
     --output_path ${OUTPUT_TOP_50K} \
     --keep_chosen_only
@@ -93,7 +93,7 @@ python ${UTILS_DIR}/COINCIDE_Indices_to_Accuracy.py \
 echo ""
 echo "Step 2: Converting Top 60K indices (selection from ${NCENTROIDS_SELECTION} centers, annotation from ${NCENTROIDS_ANNOTATION} centers)..."
 python ${UTILS_DIR}/COINCIDE_Indices_to_Accuracy.py \
-    --llava_data_path ${LLAVA_DATA_PATH} \
+    --llava_data_path ${OUTPUT_WITH_CLUSTER_ID} \
     --chosen_indices_path ${INDICES_60K} \
     --output_path ${OUTPUT_TOP_60K} \
     --keep_chosen_only
