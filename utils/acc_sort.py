@@ -101,6 +101,7 @@ def parse_args():
     parser.add_argument("--none_LBA", type=float, default=0.05)
     parser.add_argument("--use_loss", action="store_true")
     parser.add_argument("--use_current_acc", action="store_true")
+    parser.add_argument("--training_batch_size",default=128)
     return parser.parse_args()
 
 
@@ -395,7 +396,7 @@ def main(args):
                 step_list = [int(line.strip()) for line in f.readlines()]
         else:
             step_list = [391, 469]
-        step_list.append((len(selected_data)) // (4 * 8 * 4) + step_list[-1])
+        step_list.append((len(selected_data)) // args.training_batch_size + step_list[-1])
         with open(args.step_list_file, "w") as f:
             for step in step_list[:-1]:
                 f.write(f"{step}\n")
@@ -468,7 +469,7 @@ def main(args):
                 step_list = [int(line.strip()) for line in f.readlines()]
         else:
             step_list = [391, 469]
-        step_list.append((len(selected_data)) // (4 * 8 * 4) + step_list[-1])
+        step_list.append((len(selected_data)) // args.training_batch_size + step_list[-1])
         with open(args.step_list_file, "w") as f:
             for step in step_list[:-1]:
                 f.write(f"{step}\n")
@@ -545,7 +546,7 @@ def main(args):
                 step_list = [int(line.strip()) for line in f.readlines()]
         else:
             step_list = [391, 469]
-        step_list.append((len(selected_data)) // (4 * 8 * 4) + step_list[-1])   
+        step_list.append((len(selected_data)) // args.training_batch_size + step_list[-1])   
         with open(args.step_list_file, "w") as f:
             for step in step_list[:-1]:
                 f.write(f"{step}\n")
@@ -627,14 +628,12 @@ def main(args):
         num_additional_samples = int(args.selection_num * 0.10)
         additional_samples = random.sample(unselected_samples, num_additional_samples)
         selected_data.extend(additional_samples)
-        # import pdb; pdb.set_trace()
         print(f"Selected {len(selected_data)} samples total")
 
         print(f"Including {len(additional_samples)} samples from unselected clusters")
 
 
-        print("Iterations to run: ", (len(selected_data)) / (2 * 16 * 4))
-        print("we use (2 * 16 * 4) to calculate iterations to run")
+        print("Iterations to run: ", (len(selected_data)) / args.training_batch_size)
         with open(args.output_file, "w") as f:
             json.dump(selected_data, f, indent=4)
 
@@ -647,7 +646,7 @@ def main(args):
                 step_list = [int(line.strip()) for line in f.readlines()]
         else:
             step_list = [391, 469]
-        step_list.append((len(selected_data)) // (2 * 16 * 4) + step_list[-1])
+        step_list.append((len(selected_data)) // args.training_batch_size + step_list[-1])
         with open(args.step_list_file, "w") as f:
             for step in step_list[:-1]:
                 f.write(f"{step}\n")

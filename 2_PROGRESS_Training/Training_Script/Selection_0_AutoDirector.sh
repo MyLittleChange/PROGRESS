@@ -101,6 +101,7 @@ while true; do
             --selection_num ${SELECTION_NUM} \
             --selection_relative_change \
             --softmax_selection \
+            --training_batch_size 128 \ 
             --temperature ${TEMPERATURE} \
             --step_list_file ${BASE_PATH}/step_list.txt
 
