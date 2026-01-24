@@ -69,18 +69,13 @@ def parse_args():
         default=None,
     )
     parser.add_argument("--do_sort", action="store_true")
-    parser.add_argument("--do_fastest_selection", action="store_true")
+
     parser.add_argument("--selection_mid", action="store_true")
     parser.add_argument("--selection_hardest", action="store_true")
     parser.add_argument("--selection_easiest", action="store_true")
     parser.add_argument("--selection_num", type=int, default=7500)
-    parser.add_argument("--store_visual_imagination_data", action="store_true")
-    parser.add_argument(
-        "--visualize_clusters",
-        type=lambda x: [int(i) for i in x.split(",")],
-        default=None,  # Convert comma-separated string to list of integers
-        help='Comma-separated list of cluster numbers to visualize (e.g., "1,2,3")',
-    )
+
+
     parser.add_argument(
         "--selection_file",
         type=str,
@@ -104,11 +99,8 @@ def parse_args():
     parser.add_argument("--temperature", type=float, default=0.7)
     parser.add_argument("--step_list_file", type=str, default=None)
     parser.add_argument("--none_LBA", type=float, default=0.05)
-    parser.add_argument("--selection_softmax_redistribution", action="store_true")
-    parser.add_argument("--selection_relative_change_reorder", action="store_true")
     parser.add_argument("--use_loss", action="store_true")
     parser.add_argument("--use_current_acc", action="store_true")
-    parser.add_argument("--replay_previous_selection", action="store_true")
     return parser.parse_args()
 
 
@@ -558,41 +550,6 @@ def main(args):
             for step in step_list[:-1]:
                 f.write(f"{step}\n")
             f.write(f"{step_list[-1]}")
-    elif args.do_fastest_selection:
-        # Load previous lines
-        with open(args.previous_ppl_file, "r") as f:
-            previous_lines = f.readlines()
-        current_data = json.load(open(args.selection_file, "r"))
-        assert len(previous_lines) == len(lines) == len(current_data)
-        # Calculate PPL changes and create sorted indices
-        ppl_changes = []
-        for i, line in enumerate(lines):
-            # idx = int(line.split("\t")[0])
-            current_ppl = float(line.split("\t")[-1])
-            previous_ppl = float(previous_lines[i].split("\t")[-1])
-            relative_change = (previous_ppl - current_ppl) / previous_ppl
-            ppl_changes.append((relative_change, i, current_ppl, previous_ppl))
-
-        # Sort by relative PPL change (descending order)
-        ppl_changes.sort(reverse=True, key=lambda x: x[0])
-
-        # Select top selection_num samples
-        selected_data = []
-        for relative_change, orig_idx, current_ppl, previous_ppl in ppl_changes[
-            : args.selection_num
-        ]:
-            # line = lines[orig_idx]
-            # idx = int(line.split("\t")[0])
-            tmp_data = current_data[orig_idx]
-            tmp_data["ppl"] = current_ppl
-            tmp_data["ppl_change"] = relative_change
-            tmp_data["previous_ppl"] = previous_ppl
-
-            selected_data.append(tmp_data)
-
-        # Save results
-        with open(args.output_file, "w") as f:
-            json.dump(selected_data, f, indent=4)
     elif args.selection_relative_change:
         # Calculate relative accuracy changes
         with open(args.output_average_acc_change, "r") as f:
@@ -666,7 +623,7 @@ def main(args):
             if sample["cluster_id"] not in selected_cluster_ids
         ]
 
-        # Sample 15% from unselected clusters
+        # Sample 10% from unselected clusters
         num_additional_samples = int(args.selection_num * 0.10)
         additional_samples = random.sample(unselected_samples, num_additional_samples)
         selected_data.extend(additional_samples)
@@ -674,24 +631,10 @@ def main(args):
         print(f"Selected {len(selected_data)} samples total")
 
         print(f"Including {len(additional_samples)} samples from unselected clusters")
-    
-
-        if args.replay_previous_selection:
-            with open(args.previous_selected_data_file, "r") as f:
-                previous_selected_data = json.load(f)
-            unselected_samples = [
-                sample
-                for sample in previous_selected_data
-                if sample["cluster_id"] not in selected_cluster_ids
-            ]
-            num_additional_samples = int(args.selection_num * 0.05)
-            additional_samples = random.sample(unselected_samples, num_additional_samples)
-            selected_data.extend(additional_samples)
-            print(f"Including {len(additional_samples)} samples from previous selection")
 
 
-        print("Iterations to run: ", (len(selected_data)) / (2 * 8 * 4))
-        print("we use (2 * 8 * 4) to calculate iterations to run")
+        print("Iterations to run: ", (len(selected_data)) / (2 * 16 * 4))
+        print("we use (2 * 16 * 4) to calculate iterations to run")
         with open(args.output_file, "w") as f:
             json.dump(selected_data, f, indent=4)
 
@@ -704,381 +647,12 @@ def main(args):
                 step_list = [int(line.strip()) for line in f.readlines()]
         else:
             step_list = [391, 469]
-        step_list.append((len(selected_data)) // (2 * 8 * 4) + step_list[-1])
+        step_list.append((len(selected_data)) // (2 * 16 * 4) + step_list[-1])
         with open(args.step_list_file, "w") as f:
             for step in step_list[:-1]:
                 f.write(f"{step}\n")
             f.write(f"{step_list[-1]}")
 
-    elif args.selection_softmax_redistribution:
-        # Calculate relative accuracy changes
-        with open(args.output_average_acc_change, "r") as f:
-            acc_change = json.load(f)
-        relative_acc_change = acc_change["relative_acc_change"]
-
-        # Filter out negative changes
-        # Calculate target samples per cluster based on proportional changes
-        data = json.load(open(args.selection_file, "r"))
-        print("len of data in selection file", len(data))
-        sample_num_per_cluster = {}
-        for sample in data:
-            if sample["cluster_id"] not in sample_num_per_cluster:
-                sample_num_per_cluster[sample["cluster_id"]] = 1
-            else:
-                sample_num_per_cluster[sample["cluster_id"]] += 1
-        print("samples per cluster in selection file", sample_num_per_cluster)
-
-        # remove clusters from positive_changes if they have 0 samples
-        positive_changes = {k: v for k, v in relative_acc_change.items() if v > 0}
-        positive_changes = {
-            k: v
-            for k, v in positive_changes.items()
-            if int(k) in sample_num_per_cluster
-        }
-        changes_values = list(positive_changes.values())
-        initial_softmax = softmax(changes_values, args.temperature)
-
-        # Convert to adjustable proportions
-        proportions = dict(zip(positive_changes.keys(), initial_softmax))
-
-        # Calculate initial target samples and identify overflows
-        total_target = int(args.selection_num * 0.90)
-        overflow_clusters = {}
-        available_clusters = {}
-
-        for cluster_id in proportions:
-            desired_samples = int(total_target * proportions[cluster_id])
-            available = sample_num_per_cluster[int(cluster_id)]
-
-            if desired_samples > available:
-                overflow_clusters[cluster_id] = desired_samples - available
-                proportions[cluster_id] = available / total_target
-            else:
-                available_clusters[cluster_id] = available - desired_samples
-
-        # Redistribute excess probability mass
-        print("proportions before redistribution", proportions)
-        excess_samples = sum(overflow_clusters.values())
-        loop_count = 0
-        while excess_samples > 0 and available_clusters and loop_count < 15:
-            # Calculate redistribution weights based on available capacity
-            total_available_prop = sum(proportions[cid] for cid in available_clusters)
-            if total_available_prop == 0:
-                break
-            added_samples = 0
-            for cluster_id in list(available_clusters.keys()):
-                # redistribute based on the propotion of the available capacity
-                additional_samples = int(
-                    excess_samples * (proportions[cluster_id] / total_available_prop)
-                )
-                if additional_samples == 0:
-                    additional_samples = 1
-                current_samples = int(total_target * proportions[cluster_id])
-                available = sample_num_per_cluster[int(cluster_id)]
-
-                if current_samples + additional_samples > available:
-                    proportions[cluster_id] = available / total_target
-                    del available_clusters[cluster_id]
-                    added_samples += available - current_samples
-                else:
-                    proportions[cluster_id] += additional_samples / total_target
-                    added_samples += additional_samples
-            excess_samples -= added_samples
-            loop_count += 1
-        overflow_clusters.clear()
-        sum_proportions = sum(proportions.values())
-        print("sum of proportions", sum_proportions)
-        proportions = {k: v / sum_proportions for k, v in proportions.items()}
-        print("proportions after redistribution", proportions)
-        target_samples_per_cluster = {}
-        # target_samples_per_cluster_ideal = {}
-        for cluster_id, _ in positive_changes.items():
-            proportion = proportions[cluster_id]
-            target_samples = int(args.selection_num * 0.90 * proportion)
-            target_samples_per_cluster[int(cluster_id)] = min(
-                target_samples, sample_num_per_cluster[int(cluster_id)]
-            )
-            # target_samples_per_cluster_ideal[int(cluster_id)] = target_samples
-
-        print("target_samples_per_cluster", target_samples_per_cluster)
-        print("--------------------------------")
-        selected_data = []
-        random.shuffle(data)
-        for sample in data:
-            cluster_id = sample["cluster_id"]
-            if cluster_id in target_samples_per_cluster:
-                if target_samples_per_cluster[cluster_id] > 0:
-                    selected_data.append(sample)
-                    target_samples_per_cluster[cluster_id] -= 1
-
-        # Get samples from unselected clusters
-
-        print(f"Fastest selection: Selected {len(selected_data)} samples total")
-        selected_cluster_ids = set(target_samples_per_cluster.keys())
-        print("Selected cluster ids", selected_cluster_ids)
-        unselected_samples = [
-            sample
-            for sample in data
-            if sample["cluster_id"] not in selected_cluster_ids
-        ]
-
-        # Sample 15% from unselected clusters
-        num_additional_samples = int(args.selection_num * 0.10)
-        additional_samples = random.sample(unselected_samples, num_additional_samples)
-        selected_data.extend(additional_samples)
-
-        print(f"Selected {len(selected_data)} samples total")
-
-        print(f"Including {len(additional_samples)} samples from unselected clusters")
-        print("Iterations to run: ", (len(selected_data)) / (4 * 8 * 4))
-
-        with open(args.output_file, "w") as f:
-            json.dump(selected_data, f, indent=4)
-
-        # save selected cluster accuracies
-        with open(args.output_selected_cluster_accuracies, "w") as f:
-            json.dump(positive_changes, f, indent=4)
-        # save iterations to run in a json file
-        if os.path.exists(args.step_list_file):
-            with open(args.step_list_file, "r") as f:
-                step_list = [int(line.strip()) for line in f.readlines()]
-        else:
-            step_list = [391, 469]
-        step_list.append((len(selected_data)) // (4 * 8 * 4) + step_list[-1])
-        with open(args.step_list_file, "w") as f:
-            for step in step_list[:-1]:
-                f.write(f"{step}\n")
-            f.write(f"{step_list[-1]}")
-            
-    elif args.store_visual_imagination_data:
-        # Calculate relative accuracy changes
-        with open(args.output_average_acc_change, "r") as f:
-            acc_change = json.load(f)
-        relative_acc_change = acc_change["relative_acc_change"]
-
-        # Calculate target samples per cluster based on proportional changes
-        data = json.load(open(args.selection_file, "r"))
-        print("len of data in selection file", len(data))
-        sample_num_per_cluster = {}
-        for sample in data:
-            if sample["cluster_id"] not in sample_num_per_cluster:
-                sample_num_per_cluster[sample["cluster_id"]] = 1
-            else:
-                sample_num_per_cluster[sample["cluster_id"]] += 1
-        print("samples per cluster in selection file", sample_num_per_cluster)
-
-        # remove clusters from positive_changes if they have 0 samples
-
-        positive_changes = {k: v for k, v in relative_acc_change.items() if v > 0}
-        positive_changes = {
-            k: v
-            for k, v in positive_changes.items()
-            if int(k) in sample_num_per_cluster
-        }
-        # Apply softmax to the positive changes
-        changes_values = list(positive_changes.values())
-        softmax_proportions = softmax(changes_values, args.temperature)
-        # Create new proportions dictionary
-        positive_changes = dict(zip(positive_changes.keys(), softmax_proportions))
-        total_positive_change = 1.0  # Softmax outputs already sum to 1
-
-        target_samples_per_cluster = {}
-        target_samples_per_cluster_ideal = {}
-        reorder_sample_per_cluster = {}
-        for cluster_id, rel_change in positive_changes.items():
-            proportion = rel_change / total_positive_change
-            target_samples = int(args.selection_num * 0.90 * proportion)
-            if target_samples > sample_num_per_cluster[int(cluster_id)]:
-                # reorder maximum 2 times
-                target_samples_per_cluster[int(cluster_id)] = min(
-                    target_samples, sample_num_per_cluster[int(cluster_id)] * 2
-                )
-                reorder_sample_per_cluster[int(cluster_id)] = (
-                    target_samples_per_cluster[int(cluster_id)]
-                    - sample_num_per_cluster[int(cluster_id)]
-                )
-            else:
-                target_samples_per_cluster[int(cluster_id)] = target_samples
-                reorder_sample_per_cluster[int(cluster_id)] = 0
-            target_samples_per_cluster_ideal[int(cluster_id)] = target_samples
-
-        # Select samples according to calculated proportions
-        print("target_samples_per_cluster_ideal", target_samples_per_cluster_ideal)
-        print("--------------------------------")
-        print("target_samples_per_cluster", target_samples_per_cluster)
-        print("--------------------------------")
-        print(
-            "visual_imagination_sample_per_cluster",
-            reorder_sample_per_cluster,
-            sum(reorder_sample_per_cluster.values()),
-        )
-        selected_data = []
-        visual_imagination_data = []
-        random.shuffle(data)
-        for sample in data:
-            cluster_id = sample["cluster_id"]
-            if cluster_id in target_samples_per_cluster:
-                if target_samples_per_cluster[cluster_id] > 0:
-                    if reorder_sample_per_cluster[cluster_id] > 0:
-                        selected_data.append(sample)
-                        target_samples_per_cluster[cluster_id] -= 1
-                        shuffled_sample = sample
-                        visual_imagination_data.append(shuffled_sample)
-                        reorder_sample_per_cluster[cluster_id] -= 1
-        # save the selected data to a json file
-        print("len of visual imagination data", len(visual_imagination_data))
-        with open(args.output_visual_imagination_data, "w") as f:
-            json.dump(visual_imagination_data, f, indent=4)
-        # update the step list
-        with open(args.step_list_file, "r") as f:
-            step_list = [int(line.strip()) for line in f.readlines()]
-        step_list[-1] += len(visual_imagination_data) // (4 * 8 * 4)
-        print("new next step after visual imagination", step_list[-1])
-        with open(args.step_list_file, "w") as f:
-            for step in step_list[:-1]:
-                f.write(f"{step}\n")
-            f.write(f"{step_list[-1]}")
-
-    elif args.selection_relative_change_reorder:
-        # Calculate relative accuracy changes
-        with open(args.output_average_acc_change, "r") as f:
-            acc_change = json.load(f)
-        relative_acc_change = acc_change["relative_acc_change"]
-
-        # Calculate target samples per cluster based on proportional changes
-        data = json.load(open(args.selection_file, "r"))
-        print("len of data in selection file", len(data))
-        sample_num_per_cluster = {}
-        for sample in data:
-            if sample["cluster_id"] not in sample_num_per_cluster:
-                sample_num_per_cluster[sample["cluster_id"]] = 1
-            else:
-                sample_num_per_cluster[sample["cluster_id"]] += 1
-        print("samples per cluster in selection file", sample_num_per_cluster)
-
-        # remove clusters from positive_changes if they have 0 samples
-
-        positive_changes = {k: v for k, v in relative_acc_change.items() if v > 0}
-        positive_changes = {
-            k: v
-            for k, v in positive_changes.items()
-            if int(k) in sample_num_per_cluster
-        }
-        # Apply softmax to the positive changes
-        changes_values = list(positive_changes.values())
-        softmax_proportions = softmax(changes_values, args.temperature)
-        # Create new proportions dictionary
-        positive_changes = dict(zip(positive_changes.keys(), softmax_proportions))
-        total_positive_change = 1.0  # Softmax outputs already sum to 1
-
-        target_samples_per_cluster = {}
-        target_samples_per_cluster_ideal = {}
-        reorder_sample_per_cluster = {}
-        for cluster_id, rel_change in positive_changes.items():
-            proportion = rel_change / total_positive_change
-            target_samples = int(args.selection_num * 0.90 * proportion)
-            if target_samples > sample_num_per_cluster[int(cluster_id)]:
-                # reorder maximum 2 times
-                target_samples_per_cluster[int(cluster_id)] = min(
-                    target_samples, sample_num_per_cluster[int(cluster_id)] * 2
-                )
-                reorder_sample_per_cluster[int(cluster_id)] = (
-                    target_samples_per_cluster[int(cluster_id)]
-                    - sample_num_per_cluster[int(cluster_id)]
-                )
-            else:
-                target_samples_per_cluster[int(cluster_id)] = target_samples
-                reorder_sample_per_cluster[int(cluster_id)] = 0
-            target_samples_per_cluster_ideal[int(cluster_id)] = target_samples
-
-        # Select samples according to calculated proportions
-
-        print("target_samples_per_cluster_ideal", target_samples_per_cluster_ideal)
-        print("--------------------------------")
-        print("target_samples_per_cluster", target_samples_per_cluster)
-        print("--------------------------------")
-        print("reorder_sample_per_cluster", reorder_sample_per_cluster)
-        selected_data = []
-        visual_imagination_data = []
-        random.shuffle(data)
-        for sample in data:
-            cluster_id = sample["cluster_id"]
-            if cluster_id in target_samples_per_cluster:
-                if target_samples_per_cluster[cluster_id] > 0:
-                    selected_data.append(sample)
-                    target_samples_per_cluster[cluster_id] -= 1
-                    if reorder_sample_per_cluster[cluster_id] > 0:
-                        # shuffle the conversation in samples
-                        if args.shuffle_conversation:
-                            shuffled_sample = sample
-                            conversation_list = []
-                            shuffled_sample["conversations"][0]["value"] = (
-                                shuffled_sample["conversations"][0]["value"].replace(
-                                    "<image>\n", ""
-                                )
-                            )
-                            for i in range(0, len(shuffled_sample["conversations"]), 2):
-                                conversation_list.append(
-                                    shuffled_sample["conversations"][i : i + 2]
-                                )
-                            random.shuffle(conversation_list)
-                            conversation_list[0][0]["value"] = (
-                                "<image>\n" + conversation_list[0][0]["value"]
-                            )
-
-                            shuffled_sample["conversations"] = []
-                            for conversation in conversation_list:
-                                shuffled_sample["conversations"].extend(conversation)
-                            selected_data.append(shuffled_sample)
-                            reorder_sample_per_cluster[cluster_id] -= 1
-                        elif args.visual_imagination:
-                            shuffled_sample = sample
-                            visual_imagination_data.append(shuffled_sample)
-                            reorder_sample_per_cluster[cluster_id] -= 1
-        if args.visual_imagination:
-            # save the selected data to a json file
-            with open(args.output_visual_imagination_data, "w") as f:
-                json.dump(visual_imagination_data, f, indent=4)
-
-        # Get samples from unselected clusters
-
-        print(f"Fastest selection: Selected {len(selected_data)} samples total")
-        selected_cluster_ids = set(target_samples_per_cluster.keys())
-        print("Selected cluster ids", selected_cluster_ids)
-        unselected_samples = [
-            sample
-            for sample in data
-            if sample["cluster_id"] not in selected_cluster_ids
-        ]
-
-        # Sample 15% from unselected clusters
-        num_additional_samples = int(args.selection_num * 0.10)
-        additional_samples = random.sample(unselected_samples, num_additional_samples)
-        selected_data.extend(additional_samples)
-
-        print(f"Selected {len(selected_data)} samples total")
-
-        print(f"Including {len(additional_samples)} samples from unselected clusters")
-        print("Iterations to run: ", (len(selected_data)) / (4 * 8 * 4))
-        # save iterations to run in a json file
-
-        with open(args.output_file, "w") as f:
-            json.dump(selected_data, f, indent=4)
-
-        # save selected cluster accuracies
-        with open(args.output_selected_cluster_accuracies, "w") as f:
-            json.dump(positive_changes, f, indent=4)
-
-        if os.path.exists(args.step_list_file):
-            with open(args.step_list_file, "r") as f:
-                step_list = [int(line.strip()) for line in f.readlines()]
-        else:
-            step_list = [391, 469]
-        step_list.append((len(selected_data)) // (4 * 8 * 4) + step_list[-1])
-        with open(args.step_list_file, "w") as f:
-            for step in step_list[:-1]:
-                f.write(f"{step}\n")
-            f.write(f"{step_list[-1]}")
 
 
 def softmax(x, temperature=1.0):
